@@ -1,11 +1,10 @@
 # HPCBuild-Spack-Usage-Notes
----
 
-# Spack Installation and Configuration Guide
+---
 
 ## Overview
 
-This guide provides detailed instructions for installing and configuring Spack to manage software installations on a high-performance computing (HPC) system. The configuration sets up custom directories for new applications and module files.
+This guide provides detailed instructions for installing and configuring Spack to manage software installations on a high-performance computing (HPC) system. The configuration sets up custom directories for new applications and module files, including using the generic concretizer to handle various microarchitectures.
 
 ## Prerequisites
 
@@ -57,6 +56,7 @@ Add the following lines:
 ```yaml
 config:
   install_tree: /software/el9/spack/app
+  concretizer: clingo
 ```
 
 **Configuring `modules.yaml`**:
@@ -72,6 +72,22 @@ modules:
       - gcc@11.3.1
     arch_folder: false
     lmod_path: /software/el9/spack/lmod
+```
+
+**Configuring `concretizer.yaml`**:
+```bash
+spack config edit concretizer
+```
+Add the following lines:
+```yaml
+concretizer:
+  targets:
+    granularity: generic
+    host_compatible: true
+  reuse: true
+  unify: true
+  duplicates:
+    strategy: minimal
 ```
 
 ### 5. Create and Activate a Spack Environment
@@ -98,224 +114,315 @@ List installed packages within the environment:
 spack find
 ```
 
-## Troubleshooting
+### 7. Set Up Lmod
 
-### Check Spack Version
-Ensure you are using a compatible version of Spack:
-```bash
-spack --version
+#### Add Lmod Path to `MODULEPATH`
+
+Ensure Lmod is set up to use Spack-generated modules by adding the Spack Lmod path to the `MODULEPATH`:
+```sh
+if [[ ":$MODULEPATH:" != *":/software/el9/spack/lmod:"* ]]; then
+    export MODULEPATH=/software/el9/spack/lmod:$MODULEPATH
+fi
 ```
 
-### Verify Configuration Syntax
-Double-check the syntax of your configuration files (`config.yaml` and `modules.yaml`). YAML is sensitive to indentation.
+### 8. Verify and Use Modules
 
-### Restart Spack
-Reload the Spack environment setup:
-```bash
+#### Verify `MODULEPATH`
+
+Check the `MODULEPATH` to ensure it includes the Spack Lmod path:
+```sh
+echo $MODULEPATH
+```
+
+#### List and Manage Modules
+
+- **List Available Modules:**
+  ```sh
+  module avail
+  ```
+- **Load a Module:**
+  ```sh
+  module load <module_name>
+  ```
+- **Unload a Module:**
+  ```sh
+  module unload <module_name>
+  ```
+- **List Loaded Modules:**
+  ```sh
+  module list
+  ```
+- **Search for Modules:**
+  ```sh
+  module spider <module_name>
+  module keyword <keyword>
+  ```
+
+### 9. Example `.bashrc` for Spack and Lmod Integration
+
+```sh
+# .bashrc
+
+# Source global definitions
+if [ -f /etc/bashrc ]; then
+    . /etc/bashrc
+fi
+
+# User specific environment
+if ! [[ "$PATH" =~ "$HOME/.local/bin:$HOME/bin:" ]]
+then
+    PATH="$HOME/.local/bin:$HOME/bin:$PATH"
+fi
+export PATH
+
+# Uncomment the following line if you don't like systemctl's auto-paging feature:
+# export SYSTEMD_PAGER=
+
+# User specific aliases and functions
+if [ -d ~/.bashrc.d ]; then
+    for rc in ~/.bashrc.d/*; do
+        if [ -f "$rc" ]; then
+            . "$rc"
+        fi
+    done
+fi
+
+unset rc
+
+# Add Spack's lmod path to MODULEPATH if not already present
+if [[ ":$MODULEPATH:" != *":/software/el9/spack/lmod:"* ]]; then
+    export MODULEPATH=/software/el9/spack/lmod:$MODULEPATH
+fi
+
+# Add Spack to PATH
+export PATH=/software/jdizon29/spack/bin:$PATH
+
+# Source Spack environment setup
 . /software/el9/spack/share/spack/setup-env.sh
 ```
 
-### Re-create Configuration Files if Necessary
+### 10. Troubleshooting
+
+#### Common Issues and Solutions
+
+- **Module Not Found:**
+  Ensure the `MODULEPATH` is correctly set and includes the Spack Lmod path:
+  ```sh
+  echo $MODULEPATH
+  ```
+
+- **Concretization Errors:**
+  Verify the `config.yaml` and `concretizer.yaml` settings. Ensure the target and host compatibility settings are appropriate for your system.
+
+#### Check Logs and Error Messages
+
+- Review system logs and error messages for insights into issues.
+- Use Spack's debug mode for more detailed output:
+  ```sh
+  spack -d install <package_name>
+  ```
+
+#### Re-create Configuration Files if Necessary
+
 If errors persist, move or rename the problematic configuration files and re-create them:
-```bash
+```sh
 mv ~/.spack/modules.yaml ~/.spack/modules.yaml.backup
 spack config edit modules
 ```
 
-### Check File Permissions
+#### Check File Permissions
+
 Ensure the configuration files have correct permissions and are readable by Spack:
-```bash
+```sh
 ls -l ~/.spack/modules.yaml
 ```
-Sure! Here’s a list of commonly used Spack commands that you might find useful, structured in a way that should render well in a GitHub README file:
 
----
+### 11. Common Spack Commands
 
-# Common Spack Commands
+#### General Commands
 
-## General Commands
+- **Initialize Spack Environment:**
+  ```bash
+  . /software/el9/spack/share/spack/setup-env.sh
+  ```
 
-### Initialize Spack Environment
-```bash
-. /software/el9/spack/share/spack/setup-env.sh
-```
+- **Display Spack Version:**
+  ```bash
+  spack --version
+  ```
 
-### Display Spack Version
-```bash
-spack --version
-```
+- **Display Help Information:**
+  ```bash
+  spack help
+  ```
 
-### Display Help Information
-```bash
-spack help
-```
+#### Configuration Commands
 
-## Configuration Commands
+- **Edit Configuration Files:**
+  - `config.yaml`
+    ```bash
+    spack config edit config
+    ```
+  - `modules.yaml`
+    ```bash
+    spack config edit modules
+    ```
+  - `concretizer.yaml`
+    ```bash
+    spack config edit concretizer
+    ```
 
-### Edit Configuration Files
+- **List All Configuration Sections:**
+  ```bash
+  spack config list
+  ```
 
-#### `config.yaml`
-```bash
-spack config edit config
-```
+- **Get Specific Configuration Section:**
+  ```bash
+  spack config get <section>
+  ```
+  *Example:*
+  ```bash
+  spack config get config
+  ```
 
-#### `modules.yaml`
-```bash
-spack config edit modules
-```
+#### Environment Commands
 
-### List All Configuration Sections
-```bash
-spack config list
-```
+- **Create a New Environment:**
+  ```bash
+  spack env create <env-name>
+  ```
+  *Example:*
+  ```bash
+  spack env create new-apps-env
+  ```
 
-### Get Specific Configuration Section
-```bash
-spack config get <section>
-```
-*Example:*
-```bash
-spack config get config
-```
+- **Activate an Environment:**
+  ```bash
+  spack env activate <env-name>
+  ```
+  *Example:*
+  ```bash
+  spack env activate new-apps-env
+  ```
 
-## Environment Commands
+- **Deactivate the Current Environment:**
+  ```bash
+  spack env deactivate
+  ```
 
-### Create a New Environment
-```bash
-spack env create <env-name>
-```
-*Example:*
-```bash
-spack env create new-apps-env
-```
+- **List All Environments:**
+  ```bash
+  spack env list
+  ```
 
-### Activate an Environment
-```bash
-spack env activate <env-name>
-```
-*Example:*
-```bash
-spack env activate new-apps-env
-```
+- **View Environment Details:**
+  ```bash
+  spack env status
+  ```
 
-### Deactivate the Current Environment
-```bash
-spack env deactivate
-```
+#### Package Management Commands
 
-### List All Environments
-```bash
-spack env list
-```
+- **Install a Package:**
+  ```bash
+  spack install <package-name>
+  ```
+  *Example:*
+  ```bash
+  spack install hdf5
+  ```
 
-### View Environment Details
-```bash
-spack env status
-```
+- **List Installed Packages:**
+  ```bash
+  spack find
+  ```
 
-## Package Management Commands
+- **Find Specific Package Information:**
+  ```bash
+  spack info <package-name>
+  ```
+  *Example:*
+  ```bash
+  spack info hdf5
+  ```
 
-### Install a Package
-```bash
-spack install <package-name>
-```
-*Example:*
-```bash
-spack install hdf5
-```
+- **Search for Packages:**
+  ```bash
+  spack search <query>
+  ```
+  *Example:*
+  ```bash
+  spack search hdf5
+  ```
 
-### List Installed Packages
-```bash
-spack find
-```
+- **Remove an Installed Package:**
+  ```bash
+  spack uninstall <package-name>
+  ```
+  *Example:*
+  ```bash
+  spack uninstall hdf5
+  ```
 
-### Find Specific Package Information
-```bash
-spack info <package-name>
-```
-*Example:*
-```bash
-spack info hdf5
-```
+#### Module Management Commands
 
-### Search for Packages
-```bash
-spack search <query>
-```
-*Example:*
-```bash
-spack search hdf5
-```
+- **Refresh Lmod Module Files:**
+  ```bash
+  spack module lmod refresh
+  ```
 
-### Remove an Installed Package
-```bash
-spack uninstall <package-name>
-```
-*Example:*
-```bash
-spack uninstall hdf5
-```
+- **List Available Modules:**
+  ```bash
+  module avail
+  ```
 
-## Module Management Commands
+#### Debugging and Troubleshooting Commands
 
-### Refresh Lmod Module Files
-```bash
-spack module lmod refresh
-```
+- **Debug a Package Installation:**
+  ```bash
+  spack -d install <package-name>
+  ```
+  *Example:*
+  ```bash
+  spack -d install
 
-### List Available Modules
-```bash
-module avail
-```
+ hdf5
+  ```
 
-## Debugging and Troubleshooting Commands
+- **Show Concretized Specs for a Package:**
+  ```bash
+  spack spec <package-name>
+  ```
+  *Example:*
+  ```bash
+  spack spec hdf5
+  ```
 
-### Debug a Package Installation
-```bash
-spack -d install <package-name>
-```
-*Example:*
-```bash
-spack -d install hdf5
-```
+- **Get Detailed Environment Status:**
+  ```bash
+  spack debug report
+  ```
 
-### Show Concretized Specs for a Package
-```bash
-spack spec <package-name>
-```
-*Example:*
-```bash
-spack spec hdf5
-```
+#### Additional Commands
 
-### Get Detailed Environment Status
-```bash
-spack debug report
-```
+- **Generate a Mirror:**
+  ```bash
+  spack mirror create -d <directory> <spec>
+  ```
+  *Example:*
+  ```bash
+  spack mirror create -d /path/to/mirror hdf5
+  ```
 
-## Additional Commands
+- **List Compiler Information:**
+  ```bash
+  spack compilers
+  ```
 
-### Generate a Mirror
-```bash
-spack mirror create -d <directory> <spec>
-```
-*Example:*
-```bash
-spack mirror create -d /path/to/mirror hdf5
-```
+### 12. Consult Spack Documentation and Community
 
-### List Compiler Information
-```bash
-spack compilers
-```
-
----
-
-This command list should now provide a comprehensive and user-friendly reference for Spack users, formatted to display correctly in a GitHub README file.
-
-### Consult Spack Documentation and Community
 Refer to the [Spack documentation](https://spack.readthedocs.io/en/latest/) or seek help from the Spack community for further assistance.
 
 ---
 
-This structured guide should help users follow the installation and configuration process easily, ensuring they set up Spack correctly on their HPC systems.
+By following these steps, you can set up and manage Spack effectively, ensuring a smooth experience for users of all experience levels. This guide provides detailed instructions for installation, configuration, environment setup, module management, troubleshooting, and verification, including using the generic concretizer to handle various microarchitectures.
